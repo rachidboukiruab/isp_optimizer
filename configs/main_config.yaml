@@ -1,0 +1,29 @@
+train_folder: C:\Users\F36RB01\Documents\master\TFM\repos\pascalRaw_split\train
+val_folder: C:\Users\F36RB01\Documents\master\TFM\repos\RAW_cars_dataset\val
+annotations_file: C:\Users\F36RB01\Documents\master\TFM\repos\RAW_cars_dataset\annotations.csv
+
+isp:
+  config_file: configs/cv_tuning.yaml
+
+detector:
+  input_folder: C:/Users/F36RB01/Documents/master/TFM/repos/ISP_optimizer/processed_imgs
+  annotations: dataset/annotations.csv
+  verbose: False
+  show_img: False
+  save_img: True
+  output_folder: processed_imgs\detections
+
+optimizer:
+  bounds:
+    gac:
+      gain: [10, 4096]
+      gamma: [0.2, 3.]
+
+    #bcc:
+    #  brightness_offset: [0, 500]
+    #  contrast_gain: [0, 1000]                  # x256
+
+  init:
+    gac:
+      gain: 256
+      gamma: 0.45
