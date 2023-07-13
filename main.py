@@ -4,23 +4,29 @@ from optimizer.optimizer import Optimizer
 
 
 if __name__ == "__main__":
-    cfg = Config('configs\main_config.yaml')
-    isp_conf = Config(cfg["isp"]["config_file"])
-    optimizer_conf = Config(cfg["optimizer"])
-
-    out_folder = cfg["detector"]["input_folder"]
-    csv_path = cfg['annotations_file']
-    imgs_folder = cfg['val_folder']
+    cfg = Config('configs\main_config_vocDataset.yaml')
+    imgs_folder = cfg['train_folder']
 
     dataset = Dataset()
-    #dataset_dict = dataset.VOC_dataset(imgs_folder)
-    dataset_dict = dataset.RAW_cars_dataset(csv_path, imgs_folder) # {'bboxes': [[xmin, ymin, xmax, ymax]], 'img_path': ''}
+    if cfg['dataset_type'] == 'voc':
+        dataset_dict = dataset.VOC_dataset(imgs_folder)
+    else:
+        csv_path = cfg['annotations_file']
+        dataset_dict = dataset.RAW_cars_dataset(csv_path, imgs_folder)
+    # dataset_dict = {'bboxes': [[xmin, ymin, xmax, ymax]], 'img_path': ''}
 
-    opt = Optimizer(isp_conf, optimizer_conf, dataset_dict)
+    opt = Optimizer(cfg, dataset_dict)
 
-    result = opt.bayesian_optimization(acq_func="EI", acq_optimizer="sampling", verbose=True)
+    if cfg['optimizer']['optimizer_type'] == 'bayesian':
+        result = opt.bayesian_optimization(acq_func="EI", acq_optimizer="sampling", verbose=True)
+        print(result)
+    else:
+        if cfg['optimizer']['optimizer_type'] == 'cma':
+            result = opt.cma_optimization()
+            print(result)
 
-    print(result)
+
+
 
 
 
