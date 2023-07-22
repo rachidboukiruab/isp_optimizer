@@ -4,8 +4,8 @@ from optimizer.optimizer import Optimizer
 
 
 if __name__ == "__main__":
-    cfg = Config('configs\main_config_vocDataset.yaml')
-    imgs_folder = cfg['train_folder']
+    cfg = Config('configs\main_config_rawDataset.yaml')
+    imgs_folder = cfg['val_folder']
 
     dataset = Dataset()
     if cfg['dataset_type'] == 'voc':
@@ -20,10 +20,11 @@ if __name__ == "__main__":
     if cfg['optimizer']['optimizer_type'] == 'bayesian':
         result = opt.bayesian_optimization(acq_func="EI", acq_optimizer="sampling", verbose=True)
         print(result)
+    elif cfg['optimizer']['optimizer_type'] == 'cma':
+        result = opt.cma_optimization()
+        print(result)
     else:
-        if cfg['optimizer']['optimizer_type'] == 'cma':
-            result = opt.cma_optimization()
-            print(result)
+        opt.batch_image_processing()
 
 
 

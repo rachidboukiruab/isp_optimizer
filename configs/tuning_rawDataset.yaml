@@ -1,0 +1,101 @@
+module_enable_status:                 # do NOT modify modules order
+  dpc: False                          # Defect Pixel Correction
+  blc: False                           # Black Level Compensation
+  aaf: False                           # Anti-Aliasing Filter
+  awb: True                           # Auto White Balance
+  cnf: False                           # Chroma Noise Filtering
+  cfa: True                           # Color Filter Array Interpolation
+  ccm: False                           # Color Correction Matrix
+  gac: True                           # Gamma Correction
+  csc: True                           # Color Space Conversion
+  nlm: False                          # Non-Local Means Denoising
+  bnf: False                           # Bilateral Noise Filtering
+  ceh: True                           # Contrast Enhancement (contrast limited adaptive histogram equalization)
+  eeh: False                           # Edge Enhancement
+  fcs: False                           # False Color Suppression
+  hsc: False                           # Hue Saturation Control
+  bcc: True                           # Brightness Contrast Control
+  scl: False                          # Scaler
+
+hardware:
+  raw_width: 4656
+  raw_height: 3496
+  raw_bit_depth: 8
+  bayer_pattern: rggb
+
+
+# -------------------- Module Algorithms Parameters --------------------
+
+dpc:
+  diff_threshold: 30
+
+blc:
+  bl_r: 0                             # a subtractive value, not additive!
+  bl_gr: 0
+  bl_gb: 0
+  bl_b: 0
+  alpha: 0                            # x1024
+  beta: 0                             # x1024
+
+aaf: ~
+
+awb:
+  r_gain: &r_gain 2089                # x1024
+  gr_gain: 1024                       # x1024
+  gb_gain: 1024                       # x1024
+  b_gain: &b_gain 1644                # x1024
+
+cnf:
+  diff_threshold: 0
+  r_gain: *r_gain                     # x1024
+  b_gain: *b_gain                     # x1024
+
+cfa:
+  mode: bilinear
+
+ccm:
+  ccm:
+    - [ 1896, -811, -62, 0 ]          # x1024, copied from dcraw.c
+    - [ -160, 1687, -503, 0 ]
+    - [ 18, -557, 1563, 0 ]
+
+gac:
+  gain: 256                           # x256
+  gamma: 0.45
+
+csc: ~
+
+nlm:
+  search_window_size: 11
+  patch_size: 5
+  h: 4                                # larger value has stronger smoothing effect
+
+bnf:
+  intensity_sigma: 0.5                # larger value has stronger smoothing effect
+  spatial_sigma: 0.4                  # larger value has stronger smoothing effect
+
+ceh:
+  tiles: [2, 6]
+  clip_limit: 0.02
+
+eeh:
+  edge_gain: 256                      # x256
+  flat_threshold: 2                   # delta <= flat_threshold: set delta to 0
+  edge_threshold: 10                   # delta > edge_threshold: increase delta by edge_gain
+  delta_threshold: 64
+
+fcs:
+  delta_min: 0
+  delta_max: 64
+
+hsc:
+  hue_offset: 0                       # in degree
+  saturation_gain: 256                # x256
+
+bcc:
+  brightness_offset: 0
+  contrast_gain: 300                  # x256
+
+scl:
+  width: 600
+  height: 400

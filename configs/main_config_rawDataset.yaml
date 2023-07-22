@@ -1,0 +1,34 @@
+dataset_type: raw  #voc or raw
+train_folder: C:\Users\F36RB01\Documents\master\TFM\repos\RAW_cars_dataset\train
+val_folder: C:\Users\F36RB01\Documents\master\TFM\repos\RAW_cars_dataset\val
+annotations_file: C:\Users\F36RB01\Documents\master\TFM\repos\RAW_cars_dataset\annotations.csv
+
+isp:
+  config_file: configs/tuning_rawDataset.yaml
+
+detector:
+  verbose: False
+  show_img: False
+  save_img: False
+  output_folder: processed_imgs\detections
+
+optimizer:
+  optimizer_type: cma #cma or bayesian
+  normalization: True
+  bounds:
+    gac:
+      gain: [10, 4096]
+      gamma: [0.2, 3.]
+
+    bcc:
+      brightness_offset: [0, 500]
+      contrast_gain: [0, 1000]                  # x256
+
+  init:
+    gac:
+      gain: 256
+      gamma: 0.45
+
+    bcc:
+      brightness_offset: 0
+      contrast_gain: 300
