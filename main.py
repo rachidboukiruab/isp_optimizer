@@ -6,10 +6,11 @@ from optimizer.optimizer import Optimizer
 if __name__ == "__main__":
     cfg = Config('configs\main_config_rawDataset.yaml')
     imgs_folder = cfg['val_folder']
+    classes = list(cfg['detector']['classes'])
 
     dataset = Dataset()
     if cfg['dataset_type'] == 'voc':
-        dataset_dict = dataset.VOC_dataset(imgs_folder)
+        dataset_dict = dataset.VOC_dataset(imgs_folder, classes)
     else:
         csv_path = cfg['annotations_file']
         dataset_dict = dataset.RAW_cars_dataset(csv_path, imgs_folder)
@@ -23,8 +24,11 @@ if __name__ == "__main__":
     elif cfg['optimizer']['optimizer_type'] == 'cma':
         result = opt.cma_optimization()
         print(result)
+    elif cfg['optimizer']['optimizer_type'] == 'inference':
+        mean_iou, mean_mAP, end_time = opt.batch_image_processing()
+        print(f'IoU: {mean_iou:.3f} \t mAP: {mean_mAP:.3f} \t Computation Time (s): {end_time:.5f}')
     else:
-        opt.batch_image_processing()
+        print("No valid optimizer type.")
 
 
 

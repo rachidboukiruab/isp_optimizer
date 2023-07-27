@@ -1,19 +1,24 @@
-dataset_type: raw  #voc or raw
-train_folder: C:\Users\F36RB01\Documents\master\TFM\repos\RAW_cars_dataset\train
-val_folder: C:\Users\F36RB01\Documents\master\TFM\repos\RAW_cars_dataset\val
-annotations_file: C:\Users\F36RB01\Documents\master\TFM\repos\RAW_cars_dataset\annotations.csv
+dataset_type: voc  #voc or raw
+train_folder: C:\Users\F36RB01\Documents\master\TFM\repos\raw_dataset.v4i.voc\train
+val_folder: C:\Users\F36RB01\Documents\master\TFM\repos\raw_dataset.v4i.voc\valid
+annotations_file: null
 
 isp:
-  config_file: configs/tuning_rawDataset.yaml
+  config_file: configs/CMAOpt_tuning_rawDataset.yaml
+  multithread: True
 
 detector:
   verbose: False
   show_img: False
-  save_img: False
-  output_folder: processed_imgs\detections
+  save_img: True
+  output_folder: processed_imgs/test/
+  classes: [car, person, motorbike, truck] #[car, person, motorbike, truck]
+  show_gt: False
+  ficosa_model: False
+  model_path: models/best.onnx
 
 optimizer:
-  optimizer_type: cma #cma or bayesian
+  optimizer_type: inference #cma, bayesian or inference
   normalization: True
   bounds:
     gac:
@@ -24,6 +29,10 @@ optimizer:
       brightness_offset: [0, 500]
       contrast_gain: [0, 1000]                  # x256
 
+    ceh:
+      tiles: [ [2, 100], [2, 150] ]
+      clip_limit: [0.02, 100.0]
+
   init:
     gac:
       gain: 256
@@ -32,3 +41,7 @@ optimizer:
     bcc:
       brightness_offset: 0
       contrast_gain: 300
+
+    ceh:
+      tiles: [2, 6]
+      clip_limit: 0.02

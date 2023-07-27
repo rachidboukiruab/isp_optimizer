@@ -1,6 +1,12 @@
 import cv2
 import numpy as np
 import random
+import onnxruntime
+import torch
+import math
+import time
+import os
+
 
 def get_coco_name_from_id(num):
     id_to_name = {
@@ -88,6 +94,20 @@ def get_coco_name_from_id(num):
 
     return id_to_name[num]
 
+
+def ficosa_classes(num):
+    id_to_name = {
+        0: 'car',
+        1: 'truck',
+        2: 'bicycle',
+        3: 'person',
+        4: 'motorcycle',
+        5: 'bus',
+        6: 'traffic_sign',
+        7: 'traffic_light'
+    }
+
+    return id_to_name[num]
 
 def ResizeWithAspectRatio(image, width=None, height=None, inter=cv2.INTER_AREA):
     dim = None
@@ -266,3 +286,145 @@ def get_frame_ap(gt_bboxes, det_bboxes, confidence=False, n=10, th=0.5):
         ap = np.mean(ap_list)
 
     return ap
+
+
+def letterbox(im, new_shape=(640, 640), color=(114, 114, 114), auto=True, scaleFill=False, scaleup=True, stride=32):
+    # Resize and pad image while meeting stride-multiple constraints
+    shape = im.shape[:2]  # current shape [height, width]
+    if isinstance(new_shape, int):
+        new_shape = (new_shape, new_shape)
+
+    # Scale ratio (new / old)
+    r = min(new_shape[0] / shape[0], new_shape[1] / shape[1])
+    if not scaleup:  # only scale down, do not scale up (for better val mAP)
+        r = min(r, 1.0)
+
+    # Compute padding
+    ratio = r, r  # width, height ratios
+    new_unpad = int(round(shape[1] * r)), int(round(shape[0] * r))
+    dw, dh = new_shape[1] - new_unpad[0], new_shape[0] - new_unpad[1]  # wh padding
+    if auto:  # minimum rectangle
+        dw, dh = np.mod(dw, stride), np.mod(dh, stride)  # wh padding
+    elif scaleFill:  # stretch
+        dw, dh = 0.0, 0.0
+        new_unpad = (new_shape[1], new_shape[0])
+        ratio = new_shape[1] / shape[1], new_shape[0] / shape[0]  # width, height ratios
+
+    dw /= 2  # divide padding into 2 sides
+    dh /= 2
+
+    if shape[::-1] != new_unpad:  # resize
+        im = cv2.resize(im, new_unpad, interpolation=cv2.INTER_LINEAR)
+    top, bottom = int(round(dh - 0.1)), int(round(dh + 0.1))
+    left, right = int(round(dw - 0.1)), int(round(dw + 0.1))
+    im = cv2.copyMakeBorder(im, top, bottom, left, right, cv2.BORDER_CONSTANT, value=color)  # add border
+    return im, ratio, (dw, dh)
+
+
+def select_device(device='', batch_size=None):
+    # device = 'cpu' or '0' or '0,1,2,3'
+    #s = f'YOLOv5 🚀 {git_describe() or date_modified()} torch {torch.__version__} '  # string
+    s = ""
+    device = str(device).strip().lower().replace('cuda:', '')  # to string, 'cuda:0' to '0'
+    cpu = device == 'cpu'
+    if cpu:
+        os.environ['CUDA_VISIBLE_DEVICES'] = '-1'  # force torch.cuda.is_available() = False
+    elif device:  # non-cpu device requested
+        os.environ['CUDA_VISIBLE_DEVICES'] = device  # set environment variable
+        assert torch.cuda.is_available(), f'CUDA unavailable, invalid device {device} requested'  # check availability
+
+    cuda = not cpu and torch.cuda.is_available()
+    print(cuda)
+    if cuda:
+        devices = device.split(',') if device else '0'  # range(torch.cuda.device_count())  # i.e. 0,1,6,7
+        n = len(devices)  # device count
+        if n > 1 and batch_size:  # check batch_size is divisible by device_count
+            assert batch_size % n == 0, f'batch-size {batch_size} not multiple of GPU count {n}'
+        space = ' ' * (len(s) + 1)
+        for i, d in enumerate(devices):
+            p = torch.cuda.get_device_properties(i)
+            s += f"{'' if i == 0 else space}CUDA:{d} ({p.name}, {p.total_memory / 1024 ** 2}MB)\n"  # bytes to MB
+    else:
+        s += 'CPU\n'
+
+    print(s)
+    return torch.device('cuda:0' if cuda else 'cpu')
+
+
+def make_divisible(x, divisor):
+    # Returns x evenly divisible by divisor
+    return math.ceil(x / divisor) * divisor
+
+
+def check_img_size(img_size, s=32, floor=0):
+    # Verify img_size is a multiple of stride s
+    new_size = max(make_divisible(img_size, int(s)), floor)  # ceil gs-multiple
+    if new_size != img_size:
+        print(f'WARNING: --img-size {img_size} must be multiple of max stride {s}, updating to {new_size}')
+    return new_size
+
+
+def load_model(weights, imgsz, conf_thres, device):
+    device = select_device(device)
+
+    # Load model
+    w = weights[0] if isinstance(weights, list) else weights
+    assert w.endswith('.onnx')
+    stride, names = 64, [f'class{i}' for i in range(1000)]  # assign defaults
+    # check_requirements(('onnx', 'onnxruntime'))
+
+    session = onnxruntime.InferenceSession(w, None, providers=['CUDAExecutionProvider'])  # , 'CPUExecutionProvider'])
+    imgsz = check_img_size(imgsz, s=stride)  # check image size
+
+    return session, imgsz
+
+
+def inference_onnx(session, imgsz, img):
+    stride, names = 64, [f'class{i}' for i in range(1000)]  # assign defaults
+    img = img.astype('float32')
+    img /= 255.0  # 0 - 255 to 0.0 - 1.0
+
+    # Padded resize
+    img = letterbox(img, (imgsz, imgsz), stride=stride, scaleFill=True, auto=False)[0]
+
+    # Convert
+    img = img.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
+
+    if len(img.shape) == 3:
+        img = img[None]  # expand for batch dim
+
+    begin = time.time_ns()
+    pred = torch.tensor(session.run([session.get_outputs()[0].name], {session.get_inputs()[0].name: img}))
+    print(f"Inference time: {(time.time_ns() - begin) / 1000000} ms")
+
+    return img, pred
+
+
+def scale_coords(img1_shape, coords, img0_shape, ratio_pad=None):
+    # Rescale coords (xyxy) from img1_shape to img0_shape
+    if ratio_pad is None:  # calculate from img0_shape
+        #gain = min(img1_shape[0] / img0_shape[0], img1_shape[1] / img0_shape[1])
+        gain = (img1_shape[0] / img0_shape[0], img1_shape[1] / img0_shape[1])# gain  = old / new
+        pad = (img1_shape[1] - img0_shape[1] * gain[1]) / 2, (img1_shape[0] - img0_shape[0] * gain[0]) / 2  # wh padding
+    else:
+        gain = ratio_pad[0]
+        pad = ratio_pad[1]
+
+    coords[:, [0, 2]] -= pad[0]  # x padding
+    coords[:, [1, 3]] -= pad[1]  # y padding
+    coords[:, [0, 2]] /= gain[1]
+    coords[:, [1, 3]] /= gain[0]
+    clip_coords(coords, img0_shape)
+    return coords
+
+
+def clip_coords(boxes, shape):
+    # Clip bounding xyxy bounding boxes to image shape (height, width)
+    if isinstance(boxes, torch.Tensor):  # faster individually
+        boxes[:, 0].clamp_(0, shape[1])  # x1
+        boxes[:, 1].clamp_(0, shape[0])  # y1
+        boxes[:, 2].clamp_(0, shape[1])  # x2
+        boxes[:, 3].clamp_(0, shape[0])  # y2
+    else:  # np.array (faster grouped)
+        boxes[:, [0, 2]] = boxes[:, [0, 2]].clip(0, shape[1])  # x1, x2
+        boxes[:, [1, 3]] = boxes[:, [1, 3]].clip(0, shape[0])  # y1, y2

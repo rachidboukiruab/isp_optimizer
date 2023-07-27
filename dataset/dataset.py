@@ -10,14 +10,14 @@ class Dataset:
     def __init__(self):
         pass
 
-    def VOC_dataset(self, annotations_folder):
+    def VOC_dataset(self, annotations_folder, classes=["car"]):
         dataset_dict = {}
         dataset = importer.ImportVOC(path=annotations_folder, path_to_images=annotations_folder)
-        only_cars = dataset.df.query('cat_name == "car"')
+        filtered_df = dataset.df.query('cat_name in @classes')
 
-        img_id_list = only_cars['img_id'].unique().tolist()
+        img_id_list = filtered_df['img_id'].unique().tolist()
         for img_id in img_id_list:
-            rows = only_cars[only_cars['img_id'] == img_id]
+            rows = filtered_df[filtered_df['img_id'] == img_id]
             # Obtain image path
             img_name = rows['img_filename'].values[0]
             img_path = os.path.join(rows['img_folder'].values[0], img_name)
@@ -28,9 +28,10 @@ class Dataset:
                 top_left_y = int(row['ann_bbox_ymin'])
                 bottom_right_x = int(row['ann_bbox_xmax'])
                 bottom_right_y = int(row['ann_bbox_ymax'])
+                cls = row['cat_name']
                 #width = int(row['ann_bbox_xmax']) - top_left_x
                 #height = int(row['ann_bbox_ymax']) - top_left_y
-                bboxes.append([top_left_x, top_left_y, bottom_right_x, bottom_right_y])
+                bboxes.append([top_left_x, top_left_y, bottom_right_x, bottom_right_y, cls])
 
 
             dataset_dict[img_name.split('.')[0]] = {'img_path': img_path, 'bboxes': bboxes}
