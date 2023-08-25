@@ -13,7 +13,7 @@ def get_coco_name_from_id(num):
         0: 'person',
         1: 'bicycle',
         2: 'car',
-        3: 'motorcycle',
+        3: 'motorbike',
         4: 'airplane',
         5: 'bus',
         6: 'train',
@@ -101,7 +101,7 @@ def ficosa_classes(num):
         1: 'truck',
         2: 'bicycle',
         3: 'person',
-        4: 'motorcycle',
+        4: 'motorbike',
         5: 'bus',
         6: 'traffic_sign',
         7: 'traffic_light'
@@ -183,7 +183,10 @@ def get_frame_IoU(gt_bboxes, det_bboxes):
 
 def get_frame_mean_IoU(gt_bboxes, det_bboxes):
     if len(gt_bboxes) == 0:
-        return None
+        if len(det_bboxes) == 0:
+            return 1.0
+        else:
+            return 0.
     return np.mean(get_frame_IoU(gt_bboxes, det_bboxes))
 
 
@@ -218,6 +221,8 @@ def ap_voc(frame_iou, total_det, total_gt, th):
         np.float64).eps)  # cumulative true positives / cumulative true positive + cumulative false positives
     recall = tp / float(total_gt)  # cumulative true positives / total ground truths
 
+    pr = precision[-1]
+    rc = recall[-1]
     if total_det < total_gt:
         precision = np.append(precision, 0.0)
         recall = np.append(recall, 1.0)
@@ -231,7 +236,7 @@ def ap_voc(frame_iou, total_det, total_gt, th):
             ap = ap + max_precision
 
     ap = ap / 11.0
-    return ap
+    return ap, pr, rc
 
 
 def get_frame_ap(gt_bboxes, det_bboxes, confidence=False, n=10, th=0.5):
@@ -254,10 +259,12 @@ def get_frame_ap(gt_bboxes, det_bboxes, confidence=False, n=10, th=0.5):
     if total_gt == 0:
         # if we don't have any ground truth in the frame and also we don't have any prediction, we assume it's corret and we skip the frame
         if total_det == 0:
-            return None
+            return None, None, None
         # if we don't have any ground truth in the frame but we have predictions, we assume they are false positives and therefore the mAP is equal to 0
         else:
-            return 0.
+            return 0., 0., 0.
+    if total_det == 0 and total_gt > 0:
+        return 0., 0., 0.
 
     ap = 0.
     if confidence:
@@ -268,10 +275,12 @@ def get_frame_ap(gt_bboxes, det_bboxes, confidence=False, n=10, th=0.5):
         frame_iou = get_frame_IoU(gt_bboxes, det_bboxes)[:total_det]
 
         #  Compute the AP
-        ap = ap_voc(frame_iou, total_det, total_gt, th)
+        ap, precision, recall = ap_voc(frame_iou, total_det, total_gt, th)
     else:
         # Generate N random sorted lists of the detections and compute the AP in each one
         ap_list = []
+        precision_list = []
+        recall_list = []
         for i in range(n):
             # sort randomly the det_bboxes
             random.shuffle(det_bboxes)
@@ -280,12 +289,17 @@ def get_frame_ap(gt_bboxes, det_bboxes, confidence=False, n=10, th=0.5):
             frame_iou = get_frame_IoU(gt_bboxes, det_bboxes)[:total_det]
 
             #  Compute the AP
-            ap_list.append(ap_voc(frame_iou, total_det, total_gt, th))
+            ap, precision, recall = ap_voc(frame_iou, total_det, total_gt, th)
+            ap_list.append(ap)
+            precision_list.append(precision)
+            recall_list.append(recall)
 
         # Do the average of the computed APs
         ap = np.mean(ap_list)
+        precision = np.mean(precision_list)
+        recall = np.mean(recall_list)
 
-    return ap
+    return ap, precision, recall
 
 
 def letterbox(im, new_shape=(640, 640), color=(114, 114, 114), auto=True, scaleFill=False, scaleup=True, stride=32):
@@ -394,8 +408,8 @@ def inference_onnx(session, imgsz, img):
         img = img[None]  # expand for batch dim
 
     begin = time.time_ns()
-    pred = torch.tensor(session.run([session.get_outputs()[0].name], {session.get_inputs()[0].name: img}))
-    print(f"Inference time: {(time.time_ns() - begin) / 1000000} ms")
+    pred = torch.tensor(np.array(session.run([session.get_outputs()[0].name], {session.get_inputs()[0].name: img})))
+    #print(f"Inference time: {(time.time_ns() - begin) / 1000000} ms")
 
     return img, pred
 

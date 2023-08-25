@@ -1,0 +1,70 @@
+dataset:
+  train_folder: C:\Users\F36RB01\Documents\master\TFM\repos\raw_dataset.v6i.voc\train
+  val_folder: C:\Users\F36RB01\Documents\master\TFM\repos\raw_dataset.v6i.voc\valid
+  test_folder: C:\Users\F36RB01\Documents\master\TFM\repos\raw_dataset.v6i.voc\test
+  batch_size: 20
+  shuffle: False
+  num_workers: 0
+  classes: [car, person, motorbike] #Don't touch. Are the classes filtered when the dataset is loaded.
+
+isp:
+  config_file: configs/default_tuning.yaml
+
+detector:
+  verbose: False
+  show_img: False
+  save_img: False
+  output_folder: processed_imgs/test/
+  classes: [car, person, motorbike] #[car, person, motorbike]
+  show_gt: False
+  ficosa_model: True
+  model_path: models/best.onnx
+
+optimizer:
+  optimizer_type: inference #cma, bayesian or inference
+  normalization: True
+  bounds:
+    gac:
+      gain: [ 10, 4096 ]
+      gamma: [ 0.2, 3. ]
+
+    bcc:
+      brightness_offset: [ 0, 500 ]
+      contrast_gain: [ 0, 1000 ]                  # x256
+
+    ceh:
+      tiles: [ [ 2, 100 ], [ 2, 150 ] ]
+      clip_limit: [ 0.02, 100.0 ]
+
+    hsc:
+      hue_offset: [ 0, 360 ]                      # in degree
+      saturation_gain: [ 0, 1000 ]                # x256
+
+    eeh:
+      edge_gain: [ 0, 512 ]                      # x256
+      flat_threshold: [ 0, 50 ]                   # delta <= flat_threshold: set delta to 0
+      edge_threshold: [ 0, 50 ]                   # delta > edge_threshold: increase delta by edge_gain
+      delta_threshold: [ 0, 256 ]
+
+  init:
+    gac:
+      gain: 256
+      gamma: 0.45
+
+    bcc:
+      brightness_offset: 0
+      contrast_gain: 300
+
+    ceh:
+      tiles: [ 2, 6 ]
+      clip_limit: 0.02
+
+    hsc:
+      hue_offset: 0                       # in degree
+      saturation_gain: 256                # x256
+
+    eeh:
+      edge_gain: 256                      # x256
+      flat_threshold: 2                   # delta <= flat_threshold: set delta to 0
+      edge_threshold: 10                   # delta > edge_threshold: increase delta by edge_gain
+      delta_threshold: 64

@@ -1,28 +1,33 @@
 from thirdparty.openISP.utils.yacs import Config
-from dataset.dataset import Dataset
 from optimizer.optimizer import Optimizer
+import os
 
 
 if __name__ == "__main__":
-    cfg = Config('configs\main_config_rawDataset.yaml')
-    imgs_folder = cfg['val_folder']
-    classes = list(cfg['detector']['classes'])
+    # Load the configuration file 
+    cfg = Config('configs\main_config.yaml')
+    
+    # In case the out folder does not exist, create it.
+    # In this folder we will save the images after inference in case the save_img flag is true and
+    # the optimization results.
+    out_folder = cfg["detector"]["output_folder"]
+    if not os.path.exists(out_folder):
+        os.makedirs(out_folder)
 
-    dataset = Dataset()
-    if cfg['dataset_type'] == 'voc':
-        dataset_dict = dataset.VOC_dataset(imgs_folder, classes)
-    else:
-        csv_path = cfg['annotations_file']
-        dataset_dict = dataset.RAW_cars_dataset(csv_path, imgs_folder)
-    # dataset_dict = {'bboxes': [[xmin, ymin, xmax, ymax]], 'img_path': ''}
+    # Initialize the optimizer class with the configuration file
+    opt = Optimizer(cfg)
 
-    opt = Optimizer(cfg, dataset_dict)
-
+    # Check which optimizer is selected and run its corresponding function
+    # In case we put "inference" as optimizer type, we will evaluate the validation dataset and print the mAP and IoU result.
     if cfg['optimizer']['optimizer_type'] == 'bayesian':
-        result = opt.bayesian_optimization(acq_func="EI", acq_optimizer="sampling", verbose=True)
+        result, mean_metrics_dict = opt.bayesian_optimization(acq_func="EI", acq_optimizer="sampling", verbose=True)
+        yaml_file = Config(mean_metrics_dict)
+        yaml_file.dump('out/optimization_data_bayesian.yaml')
         print(result)
     elif cfg['optimizer']['optimizer_type'] == 'cma':
-        result = opt.cma_optimization()
+        result, mean_metrics_dict = opt.cma_optimization()
+        yaml_file = Config(mean_metrics_dict)
+        yaml_file.dump('out/optimization_data_cma.yaml')
         print(result)
     elif cfg['optimizer']['optimizer_type'] == 'inference':
         mean_iou, mean_mAP, end_time = opt.batch_image_processing()

@@ -1,11 +1,11 @@
 module_enable_status:                 # do NOT modify modules order
   dpc: False                          # Defect Pixel Correction
   blc: False                           # Black Level Compensation
-  aaf: True                           # Anti-Aliasing Filter
+  aaf: False                           # Anti-Aliasing Filter
   awb: True                           # Auto White Balance
   cnf: False                           # Chroma Noise Filtering
   cfa: True                           # Color Filter Array Interpolation
-  ccm: True                           # Color Correction Matrix
+  ccm: False                           # Color Correction Matrix
   gac: True                           # Gamma Correction
   csc: True                           # Color Space Conversion
   nlm: False                          # Non-Local Means Denoising
@@ -13,7 +13,7 @@ module_enable_status:                 # do NOT modify modules order
   ceh: True                           # Contrast Enhancement (contrast limited adaptive histogram equalization)
   eeh: False                           # Edge Enhancement
   fcs: False                           # False Color Suppression
-  hsc: True                           # Hue Saturation Control
+  hsc: False                           # Hue Saturation Control
   bcc: True                           # Brightness Contrast Control
   scl: False                          # Scaler
 
@@ -97,5 +97,5 @@ bcc:
   contrast_gain: 300                  # x256
 
 scl:
-  width: 4656
-  height: 3496
+  width: 600
+  height: 400

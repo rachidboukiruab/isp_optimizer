@@ -60,8 +60,8 @@ ccm:
     - [ 18, -557, 1563, 0 ]
 
 gac:
-  gain: 256                           # x256
-  gamma: 0.45
+  gain: 424                           # x256
+  gamma: 0.72
 
 csc: ~
 
@@ -75,8 +75,8 @@ bnf:
   spatial_sigma: 0.4                  # larger value has stronger smoothing effect
 
 ceh:
-  tiles: [2, 6]
-  clip_limit: 0.02
+  tiles: [19, 56]
+  clip_limit: 5.96
 
 eeh:
   edge_gain: 256                      # x256
@@ -93,8 +93,8 @@ hsc:
   saturation_gain: 256                # x256
 
 bcc:
-  brightness_offset: 0
-  contrast_gain: 300                  # x256
+  brightness_offset: 4
+  contrast_gain: 183                  # x256
 
 scl:
   width: 600
