@@ -1,7 +1,7 @@
 dataset:
   train_folder: C:\Users\F36RB01\Documents\master\TFM\repos\raw_dataset.v6i.voc\train
-  val_folder: C:\Users\F36RB01\Documents\master\TFM\repos\raw_dataset.v6i.voc\valid
-  batch_size: 20
+  val_folder: C:\Users\F36RB01\Documents\master\TFM\repos\raw_dataset.v6i.voc\test
+  batch_size: 10
   shuffle: False
   num_workers: 0
   classes: [car, person, motorbike] #Don't touch. Are the classes filtered when the dataset is loaded.
@@ -11,7 +11,7 @@ isp:
 
 detector:
   verbose: False
-  show_img: True
+  show_img: False
   save_img: False
   output_folder: processed_imgs/test/
   classes: [car, person, motorbike] #[car, person, motorbike]
