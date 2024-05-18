@@ -55,17 +55,17 @@ set (
 cuda_add_executable (hdr_isp ${SRCS})
 target_link_libraries(${PROJECT_NAME}  easylog easybmp modules)
 
-add_executable(pub_raw ./tools/cpp/pub_raw_tool.cpp)
-target_link_libraries(pub_raw  easylog)
+#add_executable(pub_raw ./tools/cpp/pub_raw_tool.cpp)
+#target_link_libraries(pub_raw  easylog)
 
 if (ROS2_ENABLE)
 
   ament_target_dependencies(hdr_isp rclcpp std_msgs sensor_msgs rclcpp_components)
-  ament_target_dependencies(pub_raw rclcpp std_msgs sensor_msgs rclcpp_components)
+  #ament_target_dependencies(pub_raw rclcpp std_msgs sensor_msgs rclcpp_components)
 
   install(TARGETS
     hdr_isp
-    pub_raw
+    #pub_raw
     DESTINATION lib/${PROJECT_NAME})
 
   if(BUILD_TESTING)

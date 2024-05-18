@@ -20,6 +20,8 @@
 
 using std::placeholders::_1;
 
+extern HdrIspErrCode ParseIspCfgFile(const std::string cfg_file_path, IspPrms &isp_prm);
+
 class IspHandleNode : public rclcpp::Node
 {
 public:
@@ -30,7 +32,9 @@ public:
         isp_prms_ = &isp_prm; 
         subscription_ = this->create_subscription<sensor_msgs::msg::Image>(
             topic, 10, std::bind(&IspHandleNode::topic_callback, this, _1));  
-        publisher_ = this->create_publisher<sensor_msgs::msg::Image>("rgb_image", 10);  
+        publisher_ = this->create_publisher<sensor_msgs::msg::Image>("rgb_image", 10);
+        isp_param_subscriber_ = this->create_subscription<std_msgs::msg::String>(
+            "isp_json_path", 10, std::bind(&IspHandleNode::isp_param_callback, this, _1));  
         //size_t size = isp_prm.info.width * 2 * isp_prm.info.height;
         isp_pipe_ = std::move(GetIspPipeImplFromDevice(isp_prm.device, isp_prm.pipe));
         if (!isp_pipe_->IsPipeVaild()) {
@@ -79,7 +83,7 @@ private:
         pub_img_->step = static_cast<sensor_msgs::msg::Image::_step_type>(pub_img_->width * 3);//static_cast<sensor_msgs::msg::Image::_step_type>(img_msg_->width * 2);//msg.step = static_cast<sensor_msgs::msg::Image::_step_type>(frame.step);
         size_t size = pub_img_->width * 3 * pub_img_->height;
         pub_img_->data.resize(size);
-        pub_img_->header.frame_id = "hdr_isp";
+        pub_img_->header.frame_id = img->header.frame_id;
         pub_img_->header.stamp = this->now();//clock_->now();
         memcpy(&pub_img_->data[0], frame_->data.bgr_u8_o->addr, size);
         //publisher_->publish(std::move(pub_img));  
@@ -87,10 +91,24 @@ private:
         RCLCPP_INFO(this->get_logger(), "pubfinished wait new frame....\r\n");
     }
 
+    void isp_param_callback(const std_msgs::msg::String::SharedPtr isp_json_path)
+    {
+        std::string path_to_json_file = isp_json_path->data;
+        auto ret = ParseIspCfgFile(path_to_json_file, *isp_prms_);
+        if (ret != HdrIspErrCode::SUCCESS)
+        {
+            RCLCPP_INFO(this->get_logger(), "%s parse failed", path_to_json_file);
+            return;
+        }
+        isp_pipe_->LoadPrms(isp_prms_);
+        RCLCPP_INFO(this->get_logger(), "%s parse succeed", path_to_json_file);
+    }
+
     rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr subscription_;
     rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr publisher_;
     rclcpp::Clock::SharedPtr clock_;
     std::shared_ptr<sensor_msgs::msg::Image> pub_img_;
+    rclcpp::Subscription<std_msgs::msg::String>::SharedPtr isp_param_subscriber_;
   // do stuff...
 };
 

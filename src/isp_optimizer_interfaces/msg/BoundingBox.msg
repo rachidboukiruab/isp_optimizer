@@ -1,0 +1,6 @@
+int64 top_left_x
+int64 top_left_y
+int64 bottom_right_x
+int64 bottom_right_y
+float64 confidence_score
+string class_name

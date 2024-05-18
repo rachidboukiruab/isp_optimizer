@@ -1,0 +1,5 @@
+isp_optimizer_interfaces/BoundingBox[] predicted_bounding_boxes
+isp_optimizer_interfaces/BoundingBox[] groundtruth_bounding_boxes
+---
+bool success   # indicate successful run of the evaluation
+isp_optimizer_interfaces/ComputerVisionMetrics result #return the obtained result in the evaluation

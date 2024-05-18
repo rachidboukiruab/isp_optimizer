@@ -20,7 +20,10 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            "data_loader = data_loader.data_loader:main"
+            "data_loader = isp_optimizer.data_loader_node:main",
+            "object_detector = isp_optimizer.object_detector_node:main",
+            "cv_metrics = isp_optimizer.cv_metrics_node:main",
+            "cma_es_optimizer = isp_optimizer.cma_es_optimizer_node:main"
         ],
     },
 )
