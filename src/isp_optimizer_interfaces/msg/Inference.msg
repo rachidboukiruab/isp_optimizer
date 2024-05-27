@@ -1,0 +1,2 @@
+sensor_msgs/Image image
+isp_optimizer_interfaces/BoundingBox[] groundtruth_bounding_boxes

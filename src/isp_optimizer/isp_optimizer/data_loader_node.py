@@ -3,20 +3,21 @@
 # Standard library imports
 import os
 import random
+import numpy as np
 
 # External package imports
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
 from std_srvs.srv import Trigger
+from std_msgs.msg import String
 from cv_bridge import CvBridge
 from pylabel import importer
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import ReentrantCallbackGroup, MutuallyExclusiveCallbackGroup
 
 # Local package imports
-from isp_optimizer_interfaces.srv import RunInference
-from isp_optimizer_interfaces.msg import BoundingBox
+from isp_optimizer_interfaces.msg import BoundingBox, Inference
 
 
 class DataLoaderNode(Node):
@@ -28,13 +29,22 @@ class DataLoaderNode(Node):
         # Parameters
         self.declare_parameter("annotations_folder_path", "/home/rachid/raw_dataset/test/")
         self.declare_parameter("classes_list", ["car"])
-        self.declare_parameter("batch_size", 10)
+        self.declare_parameter("batch_size", 1)
+        self.declare_parameter("verbose_level", 3)
+        """
+        Verbose levels: 
+            - 3 for debug logs
+            - 2 for relevant user information
+            - 1 for only warning and error logs
+            - 0 for only error logs
+        """ 
 
         # Initialize parameters
         self._annotations_folder_path = self.get_parameter("annotations_folder_path").value
         self._classes_list = self.get_parameter("classes_list").value
         self._batch_size = self.get_parameter("batch_size").value
         self._counter_images_sent_to_inference = 0
+        self._verbose_level = self.get_parameter("verbose_level").value
         
         # Load dataset
         self.dataset_dict = self.load_dataset()
@@ -44,17 +54,22 @@ class DataLoaderNode(Node):
             Trigger, "process_batch_images", self.callback_process_batch_images, callback_group=MutuallyExclusiveCallbackGroup())
 
         # Publishers and subscribers of the HDR-ISP
-        self.raw_image_publisher_ = self.create_publisher(Image, "raw_image", 10)
+        self.raw_image_publisher_ = self.create_publisher(Image, "raw_image", self._batch_size)
+        self.raw_image_path_publisher_ = self.create_publisher(String, "raw_image_path", self._batch_size)
         self.rgb_image_subscriber_ = self.create_subscription(
-            Image, "rgb_image", self.callback_rgb_image, 10, callback_group=ReentrantCallbackGroup()
+            Image, "rgb_image", self.callback_rgb_image, self._batch_size, callback_group=MutuallyExclusiveCallbackGroup()
         )
         
+        # Publisher to object_detector node
+        self.run_inference_publisher_ = self.create_publisher(Inference, "run_inference", self._batch_size)
+        
         # Log initialization
-        self.get_logger().info("DataLoaderNode initialized.")
-        self.get_logger().info("Node parameters:")
-        self.get_logger().info(f"   - annotations_folder_path: {self._annotations_folder_path}")
-        self.get_logger().info(f"   - classes_list: {self._classes_list}")
-        self.get_logger().info(f"   - batch_size: {self._batch_size}")
+        if self._verbose_level >= 2:
+            self.get_logger().info("DataLoaderNode initialized.")
+            self.get_logger().info("Node parameters:")
+            self.get_logger().info(f"   - annotations_folder_path: {self._annotations_folder_path}")
+            self.get_logger().info(f"   - classes_list: {self._classes_list}")
+            self.get_logger().info(f"   - batch_size: {self._batch_size}")
 
     def load_dataset(self):
         """
@@ -130,26 +145,28 @@ class DataLoaderNode(Node):
         self.publish_batch_images(sample_of_images)
         
         response.success = True
-        self.get_logger().info("All images has been processed and sent to inference succesfully.")
+        if self._verbose_level >= 3:
+            self.get_logger().info("All images has been processed and sent to inference succesfully.")
         
         return response
 
     def publish_batch_images(self, sample_of_images):
         for image in sample_of_images:
             image_path = self.dataset_dict[image]["img_path"]
-            self.publish_image(image, image_path)
+            self.publish_image_path(image, image_path)
         
         while self._counter_images_sent_to_inference < self._batch_size:
             pass
         
         self._counter_images_sent_to_inference = 0
-        self.get_logger().info(f"Inference counter reset to {self._counter_images_sent_to_inference}.")
+        if self._verbose_level >= 1:
+            self.get_logger().info(f"Inference counter reset to {self._counter_images_sent_to_inference}.")
         
     def publish_image(self, image_name, image_path):
         """Publish an image."""
-        with open(image_path, "rb") as f:
-            raw_data = f.read()
 
+        raw_data = np.fromfile(image_path, dtype=np.uint16)
+        
         width = 4656
         height = 3496
         msg = Image()
@@ -158,44 +175,35 @@ class DataLoaderNode(Node):
         msg.width = width
         msg.encoding = "mono16"
         msg.step = width * 2
-        msg.data = raw_data
+        msg.data = raw_data.tobytes()
 
         self.raw_image_publisher_.publish(msg)
-        self.get_logger().info(f"RAW image with name {image_name}.raw published. Images sent to inference are {self._counter_images_sent_to_inference}")
+        if self._verbose_level >= 3:
+            self.get_logger().info(f"RAW image with name {image_name}.raw published. Images sent to inference are {self._counter_images_sent_to_inference}")
         
+    def publish_image_path(self, image_name, image_path):
+        """Publish an image."""
+        msg = String()
+        msg.data = image_path
+        self.raw_image_path_publisher_.publish(msg)
+        if self._verbose_level >= 3:
+            self.get_logger().info(f"RAW image with name {image_name}.raw published. Images sent to inference are {self._counter_images_sent_to_inference}")
     
     def callback_rgb_image(self, msg):
         """Callback function for processing RGB images."""
-        self.get_logger().info("Received an RGB image.")
+        if self._verbose_level >= 3:
+            self.get_logger().info("Received an RGB image.")
 
-        image_name = msg.header.frame_id
-        groundtruth_bounding_boxes = self.dataset_dict[image_name]["bboxes"]
-        self.call_run_inference(msg, groundtruth_bounding_boxes)
-
-    def call_run_inference(self, rgb_image, groundtruth_bounding_boxes):
-        # Client topic to send rgb images to the ObjectDetector node
-        client = self.create_client(RunInference, "run_inference")
-        while not client.wait_for_service(1.0):
-            self.get_logger().warn("Waiting for Server run_inference from object_detector node...")
-            
-        request = RunInference.Request()
-        request.image = rgb_image
-        request.groundtruth_bounding_boxes = self.convert_list_to_boundingbox(groundtruth_bounding_boxes)
+        inference_msg = Inference()
+        inference_msg.image = msg
+        image_path = msg.header.frame_id
+        image_name = (image_path.split("/")[-1]).split(".")[0]        
+        inference_msg.groundtruth_bounding_boxes = self.convert_list_to_boundingbox(self.dataset_dict[image_name]["bboxes"])
+        self.run_inference_publisher_.publish(inference_msg)
         
-        future = client.call_async(request)
-        future.add_done_callback(self.callback_call_run_inference)
-        self.get_logger().info(f"Sent request to object_detector node.")
-    
-    def callback_call_run_inference(self, future):
-        try:
-            response = future.result()
-            if response.success:
-                self._counter_images_sent_to_inference += 1               
-                self.get_logger().info(f"Image {self._counter_images_sent_to_inference} processed succesfully by the object_detector node.")
-            else:               
-                self.get_logger().info("Image failed while processing in object_detector node.")
-        except Exception as e:
-            self.get_logger().error("Service call failed %r" % (e,))
+        self._counter_images_sent_to_inference += 1
+        if self._verbose_level >= 3:               
+            self.get_logger().info(f"Image {self._counter_images_sent_to_inference} sent to object_detector node.")
             
     def convert_list_to_boundingbox(self, bounding_box_list):
         bounding_boxes_msg = []

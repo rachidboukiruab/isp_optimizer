@@ -12,7 +12,7 @@ import torch
 
 # Local package imports
 from isp_optimizer_interfaces.srv import RunInference, RunEvaluation
-from isp_optimizer_interfaces.msg import BoundingBox
+from isp_optimizer_interfaces.msg import BoundingBox, Inference
 
 
 
@@ -24,18 +24,30 @@ class ObjectDetectorNode(Node):
         # Parameters
         self.declare_parameter("confidence_threshold", 0.5)
         self.declare_parameter("classes_list", ["car"])
+        self.declare_parameter("batch_size", 1)
         self.declare_parameter("show_image", True)
         self.declare_parameter("show_groundtruth", True)
         self.declare_parameter("save_image", True)
         self.declare_parameter("output_folder", "./output_inference")
+        self.declare_parameter("verbose_level", 3)
+        """
+        Verbose levels: 
+            - 3 for debug logs
+            - 2 for relevant user information
+            - 1 for only warning and error logs
+            - 0 for only error logs
+        """ 
 
         # Initialize parameters
         self._confidence_threshold = self.get_parameter("confidence_threshold").value
         self._classes_list = self.get_parameter("classes_list").value
+        self._batch_size = self.get_parameter("batch_size").value
         self._show_image = self.get_parameter("show_image").value
         self._show_groundtruth = self.get_parameter("show_groundtruth").value
         self._save_image = self.get_parameter("save_image").value
         self._output_folder = self.get_parameter("output_folder").value
+        self._verbose_level = self.get_parameter("verbose_level").value
+        self._counter_images_sent_to_evaluation = 0
 
         # Initialize bridge for converting ROS Image messages to OpenCV format
         self._ros_to_opencv_bridge = CvBridge()
@@ -50,34 +62,36 @@ class ObjectDetectorNode(Node):
             "truck": (0, 139, 139)  # Yellow
         }
         
-        # Server Initializer
-        self._server_ = self.create_service(
-            RunInference, "run_inference", self.callback_run_inference)
+        # Subscriber where to receive inference messages from data_loader node
+        self.run_inference_subscriber_ = self.create_subscription(
+            Inference, "run_inference", self.callback_run_inference, self._batch_size
+        )
 
         # Log initialization
-        self.get_logger().info("Inference service from object_detector node initialized.")
-        self.get_logger().info("Node parameters:")
-        self.get_logger().info(f"   - confidence_threshold: {self._confidence_threshold}")
-        self.get_logger().info(f"   - classes_list: {self._classes_list}")
-        self.get_logger().info(f"   - show_image: {self._show_image}")
-        self.get_logger().info(f"   - show_groundtruth: {self._show_groundtruth}")
-        self.get_logger().info(f"   - save_image: {self._save_image}")
-        self.get_logger().info(f"   - output_folder: {self._output_folder}")
+        if self._verbose_level >= 2:
+            self.get_logger().info("Inference service from object_detector node initialized.")
+            self.get_logger().info("Node parameters:")
+            self.get_logger().info(f"   - confidence_threshold: {self._confidence_threshold}")
+            self.get_logger().info(f"   - classes_list: {self._classes_list}")
+            self.get_logger().info(f"   - show_image: {self._show_image}")
+            self.get_logger().info(f"   - show_groundtruth: {self._show_groundtruth}")
+            self.get_logger().info(f"   - save_image: {self._save_image}")
+            self.get_logger().info(f"   - output_folder: {self._output_folder}")
     
-    def callback_run_inference(self, request, response):
+    def callback_run_inference(self, msg):
         # Convert ROS Image message to OpenCV format
-        self.get_logger().info("Received an RGB image for evaluation.")
+        if self._verbose_level >= 3:
+            self.get_logger().info("Received an RGB image for evaluation.")
         try:
-            opencv_image = self._ros_to_opencv_bridge.imgmsg_to_cv2(request.image, "bgr8")
+            opencv_image = self._ros_to_opencv_bridge.imgmsg_to_cv2(msg.image, "bgr8")
         except CvBridgeError as e:
-            response.success = False
-            self.get_logger().info("Error converting ROS Image to OpenCV format: %s" % str(e))      
-            return response
+            if self._verbose_level >= 1:
+                self.get_logger().warn("Error converting ROS Image to OpenCV format: %s" % str(e))      
         
         # process frame with yolov5n
         inference_result = self._model(opencv_image)
         predicted_bounding_boxes = self.convert_list_to_boundingbox(inference_result.xyxy[0])
-        groundtruth_bounding_boxes = request.groundtruth_bounding_boxes
+        groundtruth_bounding_boxes = msg.groundtruth_bounding_boxes
         
         # Show and/or save image
         if self._show_image or self._save_image:
@@ -87,21 +101,20 @@ class ObjectDetectorNode(Node):
             if self._show_image:
                 self.show_image(bounding_boxes_image)
             if self._save_image:
-                self.save_image(bounding_boxes_image, request.image.header.frame_id)
+                self.save_image(bounding_boxes_image, msg.image.header.frame_id)
         
         # Evaluate results
         self.call_evaluate_metrics(predicted_bounding_boxes, groundtruth_bounding_boxes)
-        
-        response.success = True
-        self.get_logger().info("Inference and evaluation done successfully.")
-        
-        return response
+
+        if self._verbose_level >= 3:
+            self.get_logger().info("Inference and evaluation done successfully.")
     
     def call_evaluate_metrics(self, predicted_bounding_boxes, groundtruth_bounding_boxes):
         # Client topic to send bounding boxes to the cv_metrics node
         client = self.create_client(RunEvaluation, "run_evaluation")
         while not client.wait_for_service(1.0):
-            self.get_logger().warn("Waiting for Server run_inference from object_detector node...")
+            if self._verbose_level >= 1:
+                self.get_logger().warn("Waiting for Server run_inference from object_detector node...")
             
         request = RunEvaluation.Request()
         request.predicted_bounding_boxes = predicted_bounding_boxes
@@ -113,10 +126,17 @@ class ObjectDetectorNode(Node):
     def callback_call_evaluate_metrics(self, future):
         try:
             response = future.result()
-            if response.success:            
-                self.get_logger().info(f"Evaluation done successfully.")
-            else:               
-                self.get_logger().info("Evaluation failed.")
+            if response.success:
+                self._counter_images_sent_to_evaluation += 1
+                if self._verbose_level >= 3:            
+                    self.get_logger().info(f"Evaluation done successfully.")
+                if self._verbose_level >=1:
+                    if self._counter_images_sent_to_evaluation == self._batch_size:
+                        self.get_logger().info(f"All batch of image sent for evaluation succesfully.")
+                        self._counter_images_sent_to_evaluation = 0
+            else:
+                if self._verbose_level >= 1:               
+                    self.get_logger().warn("Evaluation failed.")
         except Exception as e:
             self.get_logger().error("Service call failed %r" % (e,))
 
