@@ -164,15 +164,19 @@ cython_debug/
 .idea/
 /processed_imgs
 /out
+output_inference/
 
 # Images
 *.jpg
 *.jpeg
-*.png
+.png
 *.raw
 *.tiff
 *.bmp
 
 # Data files
 *.dat
+
+#VS Code
+.vscode/
 
