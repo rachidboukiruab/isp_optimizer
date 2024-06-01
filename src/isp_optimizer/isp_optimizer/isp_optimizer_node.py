@@ -15,7 +15,6 @@ import cma
 
 # Local package imports
 from isp_optimizer_interfaces.srv import GetMetricResults
-from isp_optimizer_interfaces.msg import ComputerVisionMetrics
 
 
 class IspOptimizerNode(Node):
@@ -24,23 +23,24 @@ class IspOptimizerNode(Node):
         
         # Parameters
         self.declare_parameter("isp_configuration_path", "./isp_configuration.json")
-        self.declare_parameter("isp_tunner_path", "./isp_tuner.json")        
+        self.declare_parameter("isp_tunner_path", "./isp_tuner.json")    
+        self.declare_parameter("json_results_path", "./results.json")    
+        #Verbose levels: 
+        #    - 3 for debug logs
+        #    - 2 for relevant user information
+        #    - 1 for only warning and error logs
+        #    - 0 for only error logs
         self.declare_parameter("verbose_level", 3)
-        """
-        Verbose levels: 
-            - 3 for debug logs
-            - 2 for relevant user information
-            - 1 for only warning and error logs
-            - 0 for only error logs
-        """ 
         
         # Initialize parameters
         self._isp_configuration_path = self.get_parameter("isp_configuration_path").value
         self._isp_tunner_path = self.get_parameter("isp_tunner_path").value
+        self._json_results_path = self.get_parameter("json_results_path").value
         self._verbose_level = self.get_parameter("verbose_level").value
         
         self._isp_configuration_dict = self.read_json_as_dict(self._isp_configuration_path)
         self._isp_tunner_dict = self.read_json_as_dict(self._isp_tunner_path)
+        self._metrics_dictionary = self.initialize_results_dict()
         
         self._optimization_loops_counter = 0
 
@@ -103,7 +103,7 @@ class IspOptimizerNode(Node):
     def get_map_and_mar(self):
         response = self.get_cv_metric_results()
         while not response.success:
-            sleep(0.1)
+            sleep(0.05)
             response = self.get_cv_metric_results()
         
         result_msg = response.result
@@ -132,6 +132,7 @@ class IspOptimizerNode(Node):
                 else:
                     self._isp_configuration_dict[module][param] = x[i]
                 text += '{}/{}: {:.2f} \t'.format(module, param, x[i])
+                self._metrics_dictionary['Hyperparameters'][module][param].append(x[i])
                 i += 1
         
         # Save new parameters in a JSON that will be used by the ISP
@@ -144,6 +145,9 @@ class IspOptimizerNode(Node):
         
         # Wait to receive the computed mAP and mAR from cv_metrics_node
         mean_average_precision, mean_average_recall = self.get_map_and_mar()
+        
+        self._metrics_dictionary['mAP'].append(mean_average_precision)
+        self._metrics_dictionary['mAR'].append(mean_average_recall)
         
         # Measure computation time in milliseconds and print results
         loop_time_ms = (time_ns() - start_time) / 1000000.
@@ -165,8 +169,13 @@ class IspOptimizerNode(Node):
         lower_bounds = [self._isp_tunner_dict[module][param]["lower_bound"] for module in self._isp_tunner_dict for param in self._isp_tunner_dict[module]]
         upper_bounds = [self._isp_tunner_dict[module][param]["upper_bound"] for module in self._isp_tunner_dict for param in self._isp_tunner_dict[module]]
 
-        xopt, es = cma.fmin2(self.get_cost_function_loop_result, initial_values, 1, {'bounds': [lower_bounds, upper_bounds]})
-        return xopt
+        try:
+            xopt, es = cma.fmin2(self.get_cost_function_loop_result, initial_values, 1, {'bounds': [lower_bounds, upper_bounds]})
+            self.save_dict_as_json(self._metrics_dictionary, self._json_results_path)
+            return xopt
+        except KeyboardInterrupt:
+            self.save_dict_as_json(self._metrics_dictionary, self._json_results_path)
+            return None       
 
         
     def generate_gamma_curve(self, gamma_value, number_points = 11):
@@ -222,6 +231,18 @@ class IspOptimizerNode(Node):
         
         with open(file_path, 'w') as file:
             json.dump(data_dict, file, indent=4)
+    
+    def initialize_results_dict(self):
+        mean_metrics_dict = {'Hyperparameters': {}} 
+        for module in self._isp_tunner_dict:
+            mean_metrics_dict['Hyperparameters'][module] = {}
+            for param in self._isp_tunner_dict[module]:
+                mean_metrics_dict['Hyperparameters'][module][param] = []
+                
+
+        mean_metrics_dict['mAP'] = []
+        mean_metrics_dict['mAR'] = []
+        return mean_metrics_dict
 
 
 def main(args=None):

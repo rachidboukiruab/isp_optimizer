@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-
+# Standard library imports
+from time import time_ns
 # External package imports
 import os
 import cv2
-import numpy as np
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
@@ -11,10 +11,8 @@ from cv_bridge import CvBridge
 import torch
 
 # Local package imports
-from isp_optimizer_interfaces.srv import RunInference, RunEvaluation
-from isp_optimizer_interfaces.msg import BoundingBox, Inference
-
-
+from .utils import get_coco_name_from_id
+from isp_optimizer_interfaces.msg import ListBoundingBox, BoundingBox
 
 class ObjectDetectorNode(Node):
     """ Image detector and evaluation using YOLOv5n pretrained model"""
@@ -26,28 +24,25 @@ class ObjectDetectorNode(Node):
         self.declare_parameter("classes_list", ["car"])
         self.declare_parameter("batch_size", 1)
         self.declare_parameter("show_image", True)
-        self.declare_parameter("show_groundtruth", True)
         self.declare_parameter("save_image", True)
         self.declare_parameter("output_folder", "./output_inference")
+        #Verbose levels: 
+        #    - 3 for debug logs
+        #    - 2 for relevant user information
+        #    - 1 for only warning and error logs
+        #    - 0 for only error logs
         self.declare_parameter("verbose_level", 3)
-        """
-        Verbose levels: 
-            - 3 for debug logs
-            - 2 for relevant user information
-            - 1 for only warning and error logs
-            - 0 for only error logs
-        """ 
 
         # Initialize parameters
         self._confidence_threshold = self.get_parameter("confidence_threshold").value
         self._classes_list = self.get_parameter("classes_list").value
         self._batch_size = self.get_parameter("batch_size").value
         self._show_image = self.get_parameter("show_image").value
-        self._show_groundtruth = self.get_parameter("show_groundtruth").value
         self._save_image = self.get_parameter("save_image").value
         self._output_folder = self.get_parameter("output_folder").value
         self._verbose_level = self.get_parameter("verbose_level").value
         self._counter_images_sent_to_evaluation = 0
+        self.start_time = 0
 
         # Initialize bridge for converting ROS Image messages to OpenCV format
         self._ros_to_opencv_bridge = CvBridge()
@@ -62,9 +57,14 @@ class ObjectDetectorNode(Node):
             "truck": (0, 139, 139)  # Yellow
         }
         
-        # Subscriber where to receive inference messages from data_loader node
-        self.run_inference_subscriber_ = self.create_subscription(
-            Inference, "run_inference", self.callback_run_inference, self._batch_size
+        # Subscriber where to receive processed images from ISP
+        self.rgb_image_subscriber_ = self.create_subscription(
+            Image, "rgb_image", self.callback_rgb_image, self._batch_size
+        )
+        
+        # Publisher to send Predicted bounding boxes
+        self.evaluation_publisher_ = self.create_publisher(
+            ListBoundingBox, "run_evaluation", self._batch_size
         )
 
         # Log initialization
@@ -74,16 +74,18 @@ class ObjectDetectorNode(Node):
             self.get_logger().info(f"   - confidence_threshold: {self._confidence_threshold}")
             self.get_logger().info(f"   - classes_list: {self._classes_list}")
             self.get_logger().info(f"   - show_image: {self._show_image}")
-            self.get_logger().info(f"   - show_groundtruth: {self._show_groundtruth}")
             self.get_logger().info(f"   - save_image: {self._save_image}")
             self.get_logger().info(f"   - output_folder: {self._output_folder}")
-    
-    def callback_run_inference(self, msg):
+            
+    def callback_rgb_image(self, msg):
+        if self._counter_images_sent_to_evaluation == 0:
+            self.start_time = time_ns()
+        
         # Convert ROS Image message to OpenCV format
         if self._verbose_level >= 3:
             self.get_logger().info("Received an RGB image for evaluation.")
         try:
-            opencv_image = self._ros_to_opencv_bridge.imgmsg_to_cv2(msg.image, "bgr8")
+            opencv_image = self._ros_to_opencv_bridge.imgmsg_to_cv2(msg, "bgr8")
         except CvBridgeError as e:
             if self._verbose_level >= 1:
                 self.get_logger().warn("Error converting ROS Image to OpenCV format: %s" % str(e))      
@@ -91,54 +93,29 @@ class ObjectDetectorNode(Node):
         # process frame with yolov5n
         inference_result = self._model(opencv_image)
         predicted_bounding_boxes = self.convert_list_to_boundingbox(inference_result.xyxy[0])
-        groundtruth_bounding_boxes = msg.groundtruth_bounding_boxes
         
         # Show and/or save image
         if self._show_image or self._save_image:
             bounding_boxes_image = self.draw_bounding_boxes(opencv_image, bounding_boxes = predicted_bounding_boxes, show_class_label = True)
-            if self._show_groundtruth:
-                bounding_boxes_image = self.draw_bounding_boxes(bounding_boxes_image, bounding_boxes = groundtruth_bounding_boxes)
             if self._show_image:
                 self.show_image(bounding_boxes_image)
             if self._save_image:
-                self.save_image(bounding_boxes_image, msg.image.header.frame_id)
+                self.save_image(bounding_boxes_image, msg.header.frame_id)
         
         # Evaluate results
-        self.call_evaluate_metrics(predicted_bounding_boxes, groundtruth_bounding_boxes)
-
-        if self._verbose_level >= 3:
-            self.get_logger().info("Inference and evaluation done successfully.")
-    
-    def call_evaluate_metrics(self, predicted_bounding_boxes, groundtruth_bounding_boxes):
-        # Client topic to send bounding boxes to the cv_metrics node
-        client = self.create_client(RunEvaluation, "run_evaluation")
-        while not client.wait_for_service(1.0):
-            if self._verbose_level >= 1:
-                self.get_logger().warn("Waiting for Server run_inference from object_detector node...")
-            
-        request = RunEvaluation.Request()
-        request.predicted_bounding_boxes = predicted_bounding_boxes
-        request.groundtruth_bounding_boxes = groundtruth_bounding_boxes
+        evaluation_msg = ListBoundingBox()
+        evaluation_msg.frame_id = msg.header.frame_id
+        evaluation_msg.bounding_boxes = predicted_bounding_boxes
+        self.evaluation_publisher_.publish(evaluation_msg)
         
-        future = client.call_async(request)
-        future.add_done_callback(self.callback_call_evaluate_metrics)
-    
-    def callback_call_evaluate_metrics(self, future):
-        try:
-            response = future.result()
-            if response.success:
-                self._counter_images_sent_to_evaluation += 1
-                if self._verbose_level >= 3:            
-                    self.get_logger().info(f"Evaluation done successfully.")
-                if self._verbose_level >=1:
-                    if self._counter_images_sent_to_evaluation == self._batch_size:
-                        self.get_logger().info(f"All batch of image sent for evaluation succesfully.")
-                        self._counter_images_sent_to_evaluation = 0
-            else:
-                if self._verbose_level >= 1:               
-                    self.get_logger().warn("Evaluation failed.")
-        except Exception as e:
-            self.get_logger().error("Service call failed %r" % (e,))
+        self._counter_images_sent_to_evaluation += 1
+        if self._verbose_level >= 3:
+            self.get_logger().info(f"Predictions from image {msg.header.frame_id} published. Remaining {self._batch_size - self._counter_images_sent_to_evaluation} images for inference.")
+
+        if self._verbose_level >= 1 and self._counter_images_sent_to_evaluation >= self._batch_size:
+            loop_time_ms = (time_ns() - self.start_time) / 1000000.
+            self._counter_images_sent_to_evaluation = 0
+            self.get_logger().info(f"All images has been sent to cv_metrics. Processing time: {loop_time_ms:.3f} ms.")
 
     def draw_bounding_boxes(self, image, bounding_boxes, show_class_label = False):
         for bounding_box in bounding_boxes:
@@ -158,9 +135,7 @@ class ObjectDetectorNode(Node):
                 
                 # Draw bounding box in the image
                 cv2.rectangle(image, (top_left_x, top_left_y), (bottom_right_x, bottom_right_y), bounding_box_color, 5)
-                
-                
-        
+
         return image
     
     def save_image(self, image, image_name):
@@ -202,95 +177,9 @@ class ObjectDetectorNode(Node):
             bounding_box_msg.bottom_right_x = int(bounding_box[2])
             bounding_box_msg.bottom_right_y = int(bounding_box[3])
             bounding_box_msg.confidence_score = float(bounding_box[4])
-            bounding_box_msg.class_name = self.get_coco_name_from_id(int(bounding_box[5]))
+            bounding_box_msg.class_name = get_coco_name_from_id(int(bounding_box[5]))
             bounding_boxes_msg.append(bounding_box_msg)
         return bounding_boxes_msg
-          
-    def get_coco_name_from_id(self, class_id):
-        id_to_name = {
-            0: 'person',
-            1: 'bicycle',
-            2: 'car',
-            3: 'motorbike',
-            4: 'airplane',
-            5: 'bus',
-            6: 'train',
-            7: 'truck',
-            8: 'boat',
-            9: 'traffic light',
-            10: 'fire hydrant',
-            11: 'stop sign',
-            12: 'parking meter',
-            13: 'bench',
-            14: 'bird',
-            15: 'cat',
-            16: 'dog',
-            17: 'horse',
-            18: 'sheep',
-            19: 'cow',
-            20: 'elephant',
-            21: 'bear',
-            22: 'zebra',
-            23: 'giraffe',
-            24: 'backpack',
-            25: 'umbrella',
-            26: 'handbag',
-            27: 'tie',
-            28: 'suitcase',
-            29: 'frisbee',
-            30: 'skis',
-            31: 'snowboard',
-            32: 'sports ball',
-            33: 'kite',
-            34: 'baseball bat',
-            35: 'baseball glove',
-            36: 'skateboard',
-            37: 'surfboard',
-            38: 'tennis racket',
-            39: 'bottle',
-            40: 'wine glass',
-            41: 'cup',
-            42: 'fork',
-            43: 'knife',
-            44: 'spoon',
-            45: 'bowl',
-            46: 'banana',
-            47: 'apple',
-            48: 'sandwich',
-            49: 'orange',
-            50: 'broccoli',
-            51: 'carrot',
-            52: 'hot dog',
-            53: 'pizza',
-            54: 'donut',
-            55: 'cake',
-            56: 'chair',
-            57: 'couch',
-            58: 'potted plant',
-            59: 'bed',
-            60: 'dining table',
-            61: 'toilet',
-            62: 'tv',
-            63: 'laptop',
-            64: 'mouse',
-            65: 'remote',
-            66: 'keyboard',
-            67: 'cell phone',
-            68: 'microwave',
-            69: 'oven',
-            70: 'toaster',
-            71: 'sink',
-            72: 'refrigerator',
-            73: 'book',
-            74: 'clock',
-            75: 'vase',
-            76: 'scissors',
-            77: 'teddy bear',
-            78: 'hair drier',
-            79: 'toothbrush'
-        }
-
-        return id_to_name[class_id]
 
 
 def main(args=None):

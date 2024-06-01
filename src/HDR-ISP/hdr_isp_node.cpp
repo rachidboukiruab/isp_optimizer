@@ -72,6 +72,8 @@ private:
     std::thread isp_handle_thread_;
     int verbose_level_;
     int batch_size_;
+    int processed_images_counter_ = 0;
+    std::chrono::milliseconds start_time_;
 
 private:
     void topic_callback(const sensor_msgs::msg::Image::SharedPtr img)
@@ -127,6 +129,10 @@ private:
         {
             RCLCPP_INFO(this->get_logger(), "Received image path: %s.", image_path->data.c_str());
         }
+        if (processed_images_counter_ == 0)
+        {
+            start_time_ = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
+        }
         //handle data
         auto start_run_tick = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
         std::string raw_file_path = image_path->data;
@@ -160,12 +166,23 @@ private:
             RCLCPP_INFO(this->get_logger(), "Image processed. Publishing...");
         }
         publisher_->publish(*pub_img_);
+        ++processed_images_counter_;
         auto end_run_tick = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
         float time_ms = (end_run_tick - start_run_tick).count();
         if (verbose_level_ >= 2)
         {
             RCLCPP_INFO(this->get_logger(), "ISP processing finished in %f milliseconds. Waiting new frame...", time_ms);
-        }  
+        }
+        if (processed_images_counter_ >= batch_size_)
+        {
+            processed_images_counter_ = 0;
+            auto end_time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
+            float processing_time = (end_time - start_time_).count();
+            if (verbose_level_ >= 1)
+            {
+                RCLCPP_INFO(this->get_logger(), "ISP processing of %d batch of images finished in %f milliseconds.", batch_size_, processing_time);
+            }
+        }
     }
 
     rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr subscription_;

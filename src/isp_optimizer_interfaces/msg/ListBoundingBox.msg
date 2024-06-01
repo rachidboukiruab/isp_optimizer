@@ -1,0 +1,2 @@
+string frame_id
+isp_optimizer_interfaces/BoundingBox[] bounding_boxes
