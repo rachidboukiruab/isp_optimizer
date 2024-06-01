@@ -5,7 +5,7 @@ PENDING.
 
 ## Computational Graph
 
-![ComputationalGraph](docs/class_diagram-Computation Graph.png)
+![ComputationalGraph](docs/ComputationalGraph.png)
 
 ## Dependencies
 
