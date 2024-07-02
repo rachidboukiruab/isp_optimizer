@@ -1,0 +1,57 @@
+{
+    "blc": {
+        "initial_value": -20.63,
+        "lower_bound": -50,
+        "upper_bound": 50
+        },
+    "wb_gain": {
+        "d65_gain": {
+            "initial_value": [
+                2.70,
+                1,
+                1,
+                2.27
+            ],
+            "lower_bound": [
+                0.0,
+                1.0,
+                1.0,
+                0.0
+            ],
+            "upper_bound": [
+                5.0,
+                1.1,
+                1.1,
+                5.0
+            ]
+        }
+    },
+    "ltm": {
+        "constrast": {
+            "initial_value": 218.90,
+            "lower_bound": 0,
+            "upper_bound": 250
+        }
+    },
+    "rgbgamma":{
+        "gammalut": {
+            "initial_value": 3.75,
+            "lower_bound": 0.1,
+            "upper_bound": 5.0
+        }
+    },
+    "ygamma":{
+        "gammalut": {
+            "initial_value": 1.96,
+            "lower_bound": 0.1,
+            "upper_bound": 2.0
+        }
+    },
+    "saturation":{
+        "rotate_angle": {
+            "initial_value": -37.36,
+            "lower_bound": -60,
+            "upper_bound": 60
+        }
+    }
+}

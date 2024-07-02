@@ -3,7 +3,7 @@ from launch_ros.actions import Node
 
 
 def generate_launch_description():
-    classes_list_ = ["person"]
+    classes_list_ = ["car", "person", "motorbike"]
     confidence_threshold = 0.5
     batch_size = 71
     verbose_level = 1
@@ -58,11 +58,18 @@ def generate_launch_description():
         executable="isp_optimizer",
         name="isp_optimizer",
         parameters=[{"isp_configuration_path": isp_configuration_path},
-                    {"isp_tunner_path": "./isp_tuner.json"},
-                    {"json_results_path": "./results.json"},
-                    {"verbose_level": verbose_level}]
+                    {"isp_tunner_path": "./isp_tuner_set1.json"},
+                    {"json_results_path": "./results_01.json"},
+                    {"verbose_level": verbose_level},
+                    {"enable_space_reduction": True},
+                    {"rounds_space_reduction": 1},
+                    {"iterations_space_reduction": 100},
+                    {"hyperparameters_normalization": True},
+                    {"cma_initial_sigma": 0.5},
+                    {"cma_population_size": 5},
+                    {"cma_max_iterations": 200}]
     )
-    
+
     ld.add_action(isp_node)
     ld.add_action(data_loader_node)
     ld.add_action(object_detector_node)
