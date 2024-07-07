@@ -5,10 +5,10 @@ from launch_ros.actions import Node
 def generate_launch_description():
     classes_list_ = ["car", "person", "motorbike"]
     confidence_threshold = 0.5
-    batch_size = 71
+    batch_size = 30
     verbose_level = 1
-    isp_configuration_path = "./isp_configuration.json"
-    annotations_folder_path = "/home/rachid/raw_dataset/train/"
+    isp_configuration_path = "./isp_configuration_rawdataset.json"
+    annotations_folder_path = "/home/rachid/git/datasets/raw_dataset/validation/"
     ld = LaunchDescription()
     
     isp_node = Node(

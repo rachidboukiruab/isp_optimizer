@@ -9,13 +9,14 @@
         "cfa": "RGGB",
         "data_type": "RAW16",
         "bpp": 16,
-        "max_bit": 10,
-        "width": 4656,
-        "height": 3496,
+        "max_bit": 12,
+        "width": 600,
+        "height": 400,
         "mipi_packed": 0
     },
     "pipe": "unpack|depwl|lsc|dpc|blc|wbgain|demoasic|ccm|ltm|rgbgamma|rgb2yuv|ygamma|contrast|sharpen|cns|saturation|yuv2rgb",
-    "blc": 0,
+    "pipe1": "unpack|depwl|lsc|dpc|blc|wbgain|demoasic|ccm|ltm|rgbgamma|rgb2yuv|ygamma|contrast|sharpen|cns|saturation|yuv2rgb",
+    "blc": 38.730880619104724,
     "lsc": {
         "mesh_width_nums": 11,
         "mesh_height_nums": 10,
@@ -178,10 +179,10 @@
             1.263672
         ],
         "d65_gain": [
-            2.626,
-            1,
-            1,
-            1.263672
+            4.033828236022057,
+            1.0365749925562546,
+            1.0939120428553206,
+            4.944848175671028
         ],
         "f11_gain": [
             2.626,
@@ -197,7 +198,7 @@
         ]
     },
     "ccm": {
-        "enable": true,
+        "enable": false,
         "out_bit": 14,
         "d50_ccm": [
             [
@@ -271,7 +272,7 @@
     "ltm": {
         "in_bit": 14,
         "out_bit": 10,
-        "constrast": 130.87156356629072,
+        "constrast": 157.5189257362703,
         "kernel_size": 7,
         "range_sigma": 0.4,
         "space_sigma": 10
@@ -282,17 +283,17 @@
         "out_bit": 8,
         "gammalut_nums": 11,
         "gammalut": [
-            0.0,
-            0.4254928705512646,
-            0.5503092852413916,
-            0.6396695313457441,
-            0.7117400322842874,
-            0.7731886085923908,
-            0.8273137035868628,
-            0.8760213444505632,
-            0.920525760952464,
-            0.9616544427688243,
-            1.0
+            0.6306931035405896,
+            0.7451856047813452,
+            0.542625552288323,
+            0.11378259845490724,
+            0.4878855187730027,
+            0.6017867827525888,
+            0.16457039275128285,
+            0.19028949923051533,
+            0.3948856126091013,
+            0.650571834785432,
+            0.012594478218296581
         ],
         "linear_back": [
             0,
@@ -320,30 +321,30 @@
         "out_bit": 8,
         "gammalut_nums": 11,
         "gammalut": [
-            0,
-            0.1,
-            0.2,
-            0.3,
-            0.4,
-            0.5,
-            0.6,
-            0.7,
-            0.8,
-            0.9,
-            1.0
+            0.025606935424751065,
+            0.4337664648961933,
+            0.9193758033673434,
+            4.3655017047291883e-05,
+            0.001827010411981647,
+            0.5832230204084048,
+            0.9923982789471331,
+            0.15774316335975386,
+            0.00011463002322346943,
+            0.3963693441157814,
+            0.9050439591662369
         ]
     },
     "saturation": {
         "enable": true,
-        "rotate_angle": -5
+        "rotate_angle": -3.007734577646332
     },
     "contrast": {
-        "enable": true,
+        "enable": false,
         "ratio": 0.1
     },
     "sharpen": {
-        "enable": true,
-        "ratio": 1.0
+        "enable": false,
+        "ratio": 0.6
     },
     "dpc": {
         "thres": 30,

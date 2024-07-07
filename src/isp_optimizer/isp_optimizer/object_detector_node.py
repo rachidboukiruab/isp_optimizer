@@ -55,6 +55,7 @@ class ObjectDetectorNode(Node):
             "car": (128, 0, 128),  # Purple
             "person": (0, 0, 139),  # Dark red
             "motorbike": (255, 255, 0),  # Cyan
+            "bicycle": (0, 139, 139),  # Yellow
         }
         
         # Subscriber to receive processed images from ISP
@@ -145,6 +146,8 @@ class ObjectDetectorNode(Node):
         Returns:
             cv2.Mat: Image with bounding boxes drawn.
         """
+        line_thickness = int(image.shape[1] * 0.001) + 1
+        font_scale = image.shape[1] * 0.001
         for bounding_box in bounding_boxes:
             class_name = bounding_box.class_name
             if (class_name in self._classes_list) and (bounding_box.confidence_score >= self._confidence_threshold):
@@ -155,10 +158,10 @@ class ObjectDetectorNode(Node):
 
                 bounding_box_color = self._class_colors.get(class_name, (0, 0, 0))
                 if show_class_label:                   
-                    cv2.putText(image, class_name, (top_left_x, top_left_y - 10), cv2.FONT_HERSHEY_SIMPLEX, 2, bounding_box_color, 5)
+                    cv2.putText(image, class_name, (top_left_x, top_left_y - 10), cv2.FONT_HERSHEY_SIMPLEX, font_scale, bounding_box_color, line_thickness)
                 
                 # Draw bounding box in the image
-                cv2.rectangle(image, (top_left_x, top_left_y), (bottom_right_x, bottom_right_y), bounding_box_color, 5)
+                cv2.rectangle(image, (top_left_x, top_left_y), (bottom_right_x, bottom_right_y), bounding_box_color, line_thickness)
 
         return image
     

@@ -26,7 +26,7 @@ PENDING.
     ```
     pip3 install torch torchvision torchaudio torchmetrics scikit-optimize cma pylabel opencv-python ultralytics matplotlib pillow numpy PyYAML scipy thop tqdm psutil requests pycocotools
     ```
-* Download the RAW dataset
+* Download the [RAW dataset](https://mega.nz/file/3F8w0BhB#p3UPW5nmFNBY66QeFb0ZiPvmOm134VU8tnJiX0ikkzk)
 
 ## ROS 2 tips
 * If you don’t want to have to source the setup file every time you open a new shell, then you can add the command to your shell startup script:
